@@ -2,38 +2,195 @@
 title: "Algorithms of AI 2"
 subtitle: "Group Project: Shortcut Learning and Spurious Correlations"
 authors: 
-  - name: "Barbara Fischer"
+  - name: "Barbara Anna-Maria Fischer"
     matriculation number: "00183211"
-  - name: "Mohamed "
-    matriculation number: "xy"
-  - name: "Hamnah "
+  - name: "Mohamed Amine Fattoumi" 
+    matriculation number: "00174673"
+  - name: "Hamnah Fahad"
     matriculation number: "xy"
   - name: "Pablo "
     matriculation number: "xy"
   - name: "Pedro "
     matriculation number: "xy"
-  - name: "Meenakshi "
-    matriculation number: "xy"
+  - name: "Meenakshi Jaiswal"
+    matriculation number: "00164649"
 format: pdf
 bibliography: references.bib
 ---
 
 # Introduction
 
+A classifier can be accurate for the wrong reason: instead of the feature that
+defines a class, it may exploit an easier predictive shortcut that works on
+the training data and on standard benchmarks but fails when conditions change
+[@geirhos2020]. The cue is a spurious correlation, and relying on it is called
+shortcut learning (also known as the Clever Hans effect). A dermoscopy network
+for melanoma recognition gave higher melanoma scores to lesions with gentian
+violet surgical skin markings: its specificity
+fell from 84.1% for unmarked to 45.8% for marked lesions, and heat maps linked
+the markings to the increase [@winkler2019].
+
+We inject an artificial colour shortcut into MNIST and ask three questions.
+(1) How strongly does a network rely on it, depending on the architecture and
+the strength of the correlation? (2) Can mitigation at the data level or at
+the loss level remove the reliance? (3) Can explainability methods reveal it?
+
+
+
 # Literature Review
+
+Geirhos et al. showed that ImageNet-trained CNNs depend heavily on texture
+while humans rely mainly on shape, and that training on Stylized-ImageNet
+shifts a network towards shape and improves robustness [@geirhos2019].
+
+Mitigation can act on the data or on the training objective. Idrissi et al.
+show that simply balancing classes and groups, by subsampling or reweighting,
+matches state-of-the-art worst-group-accuracy methods while training faster and
+needing no additional hyperparameters [@idrissi2022]. Counterfactually
+augmented data, introduced for text, are documents that annotators revise so
+that the label flips with minimal changes, which can make models less
+sensitive to spurious patterns [@kaushik2020]. Just Train Twice needs no group
+labels: it upsamples the examples that a first model fits poorly and retrains
+[@liu2021]. To inspect what a model uses, we apply Grad-CAM [@selvaraju2016],
+Integrated Gradients [@sundararajan2017] and LIME [@ribeiro2016].
+
 
 # Dataset Preparation
 
+We use MNIST (60,000 training and 10,000 test digits) and paint each digit in
+one of ten colours, one per class. In the biased training set a digit receives
+the colour of its class with probability $p$ and a random colour otherwise. A
+random colour is correct one time in ten, so the colour matches the class in
+$p + (1-p)/10$ of the images: 55%, 91% and 99.1% for $p = 0.5$, $0.9$ and
+$0.99$. A clean training set, the grayscale digit repeated in three channels,
+serves as control.
+
+Each model is evaluated on four test sets built from the same 10,000 test
+digits, which differ only in colour: *aligned* (the colour of the digit's
+class), *clean* (no colour), *random* (a random colour) and *conflicting* (the
+colour of class $(y+1) \bmod 10$). We report accuracy on each, the *shortcut
+rate* (the share of conflicting images predicted as the colour's digit) and
+the *gap* (accuracy on aligned minus accuracy on conflicting images); a large
+gap means the model follows the colour.
+
+
 # Model Training and Evaluation
+
+We compare a fully connected network (MLP, 103,982 parameters) with a small
+CNN (106,154 parameters); the MLP has one hidden layer of 44 units so that
+both models have almost the same size. The CNN has two blocks of convolution
+($3 \times 3$), ReLU and max pooling with 16 and 32 filters, followed by linear
+layers $1568 \to 64 \to 10$. All 39 trainings use one shared loop
+(cross-entropy, Adam with learning rate $10^{-3}$, batch size 128, 5 epochs)
+and seeds 0, 1 and 2; we report mean ± standard deviation over the seeds.
+
+| model | training | $p$ | aligned | conflicting | shortcut rate | gap |
+|---|---|---|---|---|---|---|
+| MLP | clean | -- | 95.2 ± 0.6 | 96.3 ± 0.2 | 0.3 ± 0.1 | -1.1 ± 0.5 |
+| MLP | biased | 0.9 | 99.0 ± 0.0 | 81.6 ± 1.3 | 6.4 ± 0.6 | 17.4 ± 1.3 |
+| CNN | clean | -- | 96.3 ± 0.4 | 97.2 ± 0.9 | 0.2 ± 0.1 | -1.0 ± 1.3 |
+| CNN | biased | 0.5 | 99.1 ± 0.1 | 97.3 ± 0.1 | 0.6 ± 0.1 | 1.8 ± 0.1 |
+| CNN | biased | 0.9 | 99.6 ± 0.1 | 93.2 ± 0.3 | 2.7 ± 0.3 | 6.4 ± 0.2 |
+| CNN | biased | 0.99 | 99.9 ± 0.0 | 58.0 ± 4.6 | 28.3 ± 5.7 | 41.9 ± 4.6 |
+
+: Test accuracy (%) and shortcut measures without mitigation, mean ± std over
+3 seeds. {#tbl-baseline}
+
+Biased models reach 99--100% on aligned images, higher than clean-trained
+models, so a normal test set hides the shortcut (@tbl-baseline). Models
+trained on clean data show no gap, so the gap is caused by the injected
+colour. At equal size the MLP has a larger gap (17.4 points) than the CNN
+(6.4); a possible reason, which we did not test, is that convolutional filters
+respond to local shape. The strength of the correlation matters most: the
+CNN's gap grows from 1.8 points at $p = 0.5$ to 41.9 at $p = 0.99$, where only
+about 540 training images have a conflicting colour.
+
 
 # Data mitigation
 
+We test two mitigations that change only the training data. The model, loss,
+optimiser, epochs and test sets stay as in the baseline, so differences in
+accuracy can be attributed to the data (@tbl-mitigation).
+
+*Augmentation* paints each digit with a new random colour every time it is
+read, always starting from the original grayscale digit: recolouring an
+already coloured digit could keep a brightness that depends on the old colour
+and therefore on the class, a hidden shortcut. The colour then matches the
+label only by chance (about 10%), and the method does not depend on $p$. It
+follows the idea of randomising the shortcut, as Stylized-ImageNet does for
+texture [@geirhos2019].
+
+*Rebalancing* adds conflicting copies, the same digit painted in a colour that
+is never its class, until the colour matches the label in 50% of the images.
+This adds about 49,000 ($p = 0.9$) or 59,000 ($p = 0.99$) images, so the
+training set grows to about 109,000 and 119,000 images. This is related to data
+balancing [@idrissi2022] and counterfactual augmentation [@kaushik2020].
+
+
 # Model mitigation
 
-Concerning the mitigation of shortcut learning through model features, 
+*Reweighting* keeps the data and changes the loss: samples whose colour
+differs from the label get weight 10, all others weight 1, and the loss is the
+mean of the weighted per-sample cross-entropy. It needs the shortcut label of
+every training image but creates no new images and keeps 60,000 samples.
+
+| $p$ | method | aligned | clean | conflicting | gap |
+|---|---|---|---|---|---|
+| 0.9 | none | 99.6 ± 0.1 | 93.1 ± 1.8 | 93.2 ± 0.3 | 6.4 ± 0.2 |
+| 0.9 | augmentation | 98.3 ± 0.2 | 98.3 ± 0.2 | 98.3 ± 0.2 | 0.0 ± 0.0 |
+| 0.9 | rebalancing | 99.3 ± 0.1 | 98.5 ± 0.1 | 98.0 ± 0.2 | 1.2 ± 0.1 |
+| 0.9 | reweighting | 98.4 ± 0.2 | 96.6 ± 0.2 | 95.5 ± 0.3 | 2.9 ± 0.4 |
+| 0.99 | none | 99.9 ± 0.0 | 67.2 ± 5.7 | 58.0 ± 4.6 | 41.9 ± 4.6 |
+| 0.99 | augmentation | 98.3 ± 0.2 | 98.3 ± 0.2 | 98.3 ± 0.2 | 0.0 ± 0.0 |
+| 0.99 | rebalancing | 99.2 ± 0.1 | 98.5 ± 0.1 | 98.3 ± 0.2 | 1.0 ± 0.1 |
+| 0.99 | reweighting | 99.4 ± 0.0 | 83.6 ± 5.1 | 80.8 ± 1.3 | 18.6 ± 1.3 |
+
+: All mitigations, test accuracy (%), mean ± std over 3 seeds. The gap is
+averaged per seed, so it can differ by 0.1 from the rounded difference.
+{#tbl-mitigation}
+
+Augmentation and rebalancing reach about 98--99% on all test sets at both
+values of $p$. Augmentation removes the gap completely but loses accuracy on aligned images
+(98.3% against 99.6--99.9%), because colour is no longer a useful cue;
+rebalancing leaves a gap of about 1 point, perhaps because the training
+correlation is still 0.5, which we did not test. Reweighting helps less: at
+$p = 0.9$ it raises conflicting accuracy from 93.2% to 95.5%, and at
+$p = 0.99$ by 22.8 points to 80.8%, with a gap of 18.6 points remaining. One
+reason is visible in the weights: at $p = 0.99$ only 0.9% of the training
+images are conflicting, so with weight 10 they carry about 8.3% of the total
+weight (49.7% at $p = 0.9$). Equal total weight would need a weight of about
+110, which we did not try, so this comparison holds for the fixed weight only.
+
+Further caveats: rebalancing uses about twice as many images and gradient
+steps, so part of its gain may come from more data; augmentation needs the
+original digits and the knowledge that colour is the shortcut, rarely available
+for real shortcuts; and with three seeds and at most 0.5 points between them
+we do not rank augmentation and rebalancing.
+
+# Explainable AI
+
+Grad-CAM turns the gradients flowing into the last convolutional layer into a
+coarse heatmap [@selvaraju2016], Integrated Gradients accumulates gradients
+along a path from a baseline input to score every input feature
+[@sundararajan2017], and LIME fits a simple model around a single prediction
+[@ribeiro2016]. We applied Grad-CAM and Integrated Gradients to the baseline
+and the three mitigated models. **[TODO Barbara, Mohamed: one to three sentences on what the methods
+showed (did the heatmaps highlight the colour?), which method helped most, and
+the saliency caveat.]**
 
 
 # Conclusion
+
+A normal test set hides the shortcut: biased models reach 99--100% on aligned
+images but fall to 58.0% on conflicting images at $p = 0.99$, and the reliance
+grows with the strength of the correlation and differs between architectures.
+Mitigation on the data removed the gap almost completely (at most 1.2 points),
+and reweighting with a fixed weight reduced it from 41.9 to 18.6 points. These
+results come from one dataset, one known synthetic shortcut, two small
+architectures and 3 seeds; unknown shortcuts, as in most real applications,
+are a harder problem that our experiments do not address. **[TODO: one sentence on the explainability
+results.]**
+
 
 # References
 
