@@ -16,6 +16,7 @@ authors:
     matriculation number: "00164649"
 format: pdf
 bibliography: references.bib
+geometry: margin=2.3cm
 ---
 
 # Introduction
