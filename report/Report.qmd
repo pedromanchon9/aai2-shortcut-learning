@@ -17,6 +17,7 @@ authors:
 format: pdf
 bibliography: references.bib
 geometry: margin=2.3cm
+fontsize: 10pt
 ---
 
 # Introduction
