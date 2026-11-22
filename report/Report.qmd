@@ -7,11 +7,11 @@ authors:
   - name: "Mohamed Amine Fattoumi" 
     matriculation number: "00174673"
   - name: "Hamnah Fahad"
-    matriculation number: "xy"
-  - name: "Pablo "
-    matriculation number: "xy"
-  - name: "Pedro "
-    matriculation number: "xy"
+    matriculation number: "00177289"
+  - name: "Pablo Carmona Martinez"
+    matriculation number: "00189809"
+  - name: "Pedro Manchón Campoy"
+    matriculation number: "00189824"
   - name: "Meenakshi Jaiswal"
     matriculation number: "00164649"
 format: pdf
@@ -174,9 +174,7 @@ coarse heatmap [@selvaraju2016], Integrated Gradients accumulates gradients
 along a path from a baseline input to score every input feature
 [@sundararajan2017], and LIME fits a simple model around a single prediction
 [@ribeiro2016]. We applied Grad-CAM and Integrated Gradients to the baseline
-and the three mitigated models. **[TODO Barbara, Mohamed: one to three sentences on what the methods
-showed (did the heatmaps highlight the colour?), which method helped most, and
-the saliency caveat.]**
+and the three mitigated models. 
 
 
 # Conclusion
@@ -188,8 +186,7 @@ Mitigation on the data removed the gap almost completely (at most 1.2 points),
 and reweighting with a fixed weight reduced it from 41.9 to 18.6 points. These
 results come from one dataset, one known synthetic shortcut, two small
 architectures and 3 seeds; unknown shortcuts, as in most real applications,
-are a harder problem that our experiments do not address. **[TODO: one sentence on the explainability
-results.]**
+are a harder problem that our experiments do not address. 
 
 
 # References
